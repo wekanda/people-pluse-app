@@ -13,14 +13,22 @@ Base.metadata.create_all(bind=engine)
 
 # Ensure new SQLite columns exist when the app schema evolves.
 def ensure_schema_columns():
-    if "sqlite" in str(engine.url):
-        with engine.connect() as conn:
-            result = conn.execute(text("PRAGMA table_info(employees)"))
-            columns = [row[1] for row in result]
-            if 'location' not in columns:
-                conn.execute(text('ALTER TABLE employees ADD COLUMN location VARCHAR'))
+    db_url = str(engine.url)
+    if "sqlite" in db_url:
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text("PRAGMA table_info(employees)"))
+                columns = [row[1] for row in result]
+                if 'location' not in columns:
+                    conn.execute(text('ALTER TABLE employees ADD COLUMN location VARCHAR'))
+                    conn.commit()
+        except Exception as e:
+            print(f"SQLite schema check warning: {e}")
 
-ensure_schema_columns()
+try:
+    ensure_schema_columns()
+except Exception as e:
+    print(f"Schema initialization warning: {e}")
 
 app = FastAPI(title="PEOPLE PLUSE API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
