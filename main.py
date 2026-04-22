@@ -46,14 +46,23 @@ app.include_router(upload.router)
 def root():
     return {"message": "PEOPLE PLUSE API running"}
 
-@app.get("/api/debug/users")
-def debug_users(db: Session = Depends(get_db)):
-    """Debug endpoint to check users"""
-    users = db.query(models.User).all()
-    return {
-        "users": [{"id": u.id, "email": u.email, "role": u.role} for u in users],
-        "count": len(users)
-    }
+@app.get("/api/debug/schema")
+def debug_schema(db: Session = Depends(get_db)):
+    """Debug endpoint to check database schema"""
+    try:
+        # Get all table names
+        from sqlalchemy import text
+        result = db.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"))
+        tables = [row[0] for row in result]
+        
+        schema_info = {}
+        for table in tables:
+            result = db.execute(text(f"SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = '{table}' ORDER BY ordinal_position"))
+            schema_info[table] = [{"name": row[0], "type": row[1], "nullable": row[2]} for row in result]
+        
+        return {"tables": tables, "schema": schema_info}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/dashboard")
 def dashboard(db: Session = Depends(get_db)):
