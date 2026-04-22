@@ -17,19 +17,19 @@ db = SessionLocal()
 # Create test users
 test_users = [
     {
-        "email": "admin@peopleplus.com",
+        "email": "admin@peoplepluse.com",
         "password": "admin123",
         "full_name": "Admin User",
         "role": "hr_admin"
     },
     {
-        "email": "manager@peopleplus.com",
+        "email": "manager@peoplepluse.com",
         "password": "manager123",
         "full_name": "Project Manager",
         "role": "project_manager"
     },
     {
-        "email": "staff@peopleplus.com",
+        "email": "staff@peoplepluse.com",
         "password": "staff123",
         "full_name": "Staff Member",
         "role": "staff"
