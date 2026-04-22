@@ -8,16 +8,8 @@ from database import engine, Base, get_db
 from routers import employees, leave, timesheet, appraisal, documents, notifications, upload
 from auth_router import router as auth_router
 import models
-import sys
 
-print("Starting People Pluse API...", file=sys.stderr)
-
-try:
-    print("Creating database tables...", file=sys.stderr)
-    Base.metadata.create_all(bind=engine)
-    print("Database tables created successfully", file=sys.stderr)
-except Exception as e:
-    print(f"Error creating database tables: {e}", file=sys.stderr)
+Base.metadata.create_all(bind=engine)
 
 # Ensure new SQLite columns exist when the app schema evolves.
 def ensure_schema_columns():
@@ -31,12 +23,12 @@ def ensure_schema_columns():
                     conn.execute(text('ALTER TABLE employees ADD COLUMN location VARCHAR'))
                     conn.commit()
         except Exception as e:
-            print(f"SQLite schema check warning: {e}", file=sys.stderr)
+            print(f"SQLite schema check warning: {e}")
 
 try:
     ensure_schema_columns()
 except Exception as e:
-    print(f"Schema initialization warning: {e}", file=sys.stderr)
+    print(f"Schema initialization warning: {e}")
 
 app = FastAPI(title="PEOPLE PLUSE API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -114,4 +106,4 @@ def dashboard(db: Session = Depends(get_db)):
 try:
     app.mount("/", StaticFiles(directory="static", html=True), name="static")
 except Exception as e:
-    print(f"Warning: Could not mount static files: {e}", file=sys.stderr)
+    print(f"Warning: Could not mount static files: {e}")

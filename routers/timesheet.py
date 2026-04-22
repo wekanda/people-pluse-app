@@ -34,6 +34,16 @@ class TimesheetSummary(BaseModel):
     days_recorded: int
     standard_day_hours: int
 
+@router.get("/", response_model=List[TimesheetResponse])
+def get_all_timesheets(db: Session = Depends(get_db), current_user=Depends(get_current_user), skip: int = 0, limit: int = 100):
+    """Get all timesheets for HR admins/project managers, or current user's timesheets otherwise"""
+    if current_user.role in ["hr_admin", "project_manager"]:
+        return db.query(models.Timesheet).order_by(models.Timesheet.date.desc()).offset(skip).limit(limit).all()
+    elif current_user.employee_id:
+        return db.query(models.Timesheet).filter(models.Timesheet.employee_id == current_user.employee_id).order_by(models.Timesheet.date.desc()).offset(skip).limit(limit).all()
+    else:
+        raise HTTPException(status_code=403, detail="No employee record associated with this account")
+
 @router.post("/entry", response_model=TimesheetResponse)
 def add_entry(timesheet: TimesheetCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     db_timesheet = models.Timesheet(**timesheet.dict())
