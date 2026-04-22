@@ -66,35 +66,52 @@ async def upload_excel(file: UploadFile = File(...), db: Session = Depends(get_d
 
         workbook = openpyxl.load_workbook(file.file)
         imported = 0
+        updated = 0
+        errors = []
+        
         for sheet in workbook.worksheets:
             header_row_index, headers = _find_headers(sheet)
             if not headers:
                 continue
             for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
-                row_data = _map_row_data(headers, row)
-                if not row_data.get("file_code") or not row_data.get("full_name"):
-                    continue
-                row_data = _normalize_row_data(row_data)
-                print(f"Processing row for {row_data.get('full_name')} - file_code: {row_data.get('file_code')}")
-                existing = db.query(models.Employee).filter(models.Employee.file_code == row_data["file_code"]).first()
-                if existing:
-                    for key, value in row_data.items():
-                        if hasattr(existing, key) and value is not None:
-                            setattr(existing, key, value)
-                else:
-                    try:
-                        # Ensure contact_number is always a string
-                        if 'contact_number' in row_data and row_data['contact_number'] is not None:
-                            row_data['contact_number'] = str(row_data['contact_number'])
+                try:
+                    row_data = _map_row_data(headers, row)
+                    if not row_data.get("file_code") or not row_data.get("full_name"):
+                        continue
+                    row_data = _normalize_row_data(row_data)
+                    print(f"Processing row for {row_data.get('full_name')} - file_code: {row_data.get('file_code')}")
+                    
+                    # Ensure contact_number is always a string
+                    if 'contact_number' in row_data and row_data['contact_number'] is not None:
+                        row_data['contact_number'] = str(row_data['contact_number'])
+                    
+                    existing = db.query(models.Employee).filter(models.Employee.file_code == row_data["file_code"]).first()
+                    if existing:
+                        # Update existing record
+                        for key, value in row_data.items():
+                            if hasattr(existing, key) and value is not None:
+                                setattr(existing, key, value)
+                        updated += 1
+                        print(f"Updated existing employee: {row_data.get('full_name')}")
+                    else:
+                        # Create new record
                         db.add(models.Employee(**row_data))
-                    except Exception as row_error:
-                        print(f"Error adding employee {row_data.get('full_name')}: {row_error}")
-                        print(f"Row data: {row_data}")
-                        raise row_error
-                imported += 1
+                        imported += 1
+                        print(f"Added new employee: {row_data.get('full_name')}")
+                    
+                    # Commit after each successful operation to avoid batch conflicts
+                    db.commit()
+                    
+                except Exception as row_error:
+                    print(f"Error processing employee {row_data.get('full_name', 'Unknown')}: {row_error}")
+                    errors.append(f"Row {row_data.get('full_name', 'Unknown')}: {str(row_error)}")
+                    db.rollback()  # Rollback this specific row's changes
+                    continue
 
-        db.commit()
-        return {"message": f"Imported/updated {imported} records"}
+        if errors:
+            return {"message": f"Imported {imported} new records, updated {updated} existing records. {len(errors)} errors occurred.", "errors": errors[:10]}  # Limit errors shown
+        else:
+            return {"message": f"Successfully imported {imported} new records and updated {updated} existing records"}
     except HTTPException as e:
         raise e
     except Exception as e:
