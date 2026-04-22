@@ -1,7 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 import openpyxl
-from datetime import datetime
+from datetime import datetime, date
+from sqlalchemy import String
 import models
 from database import get_db
 from auth import get_current_user
@@ -74,13 +75,22 @@ async def upload_excel(file: UploadFile = File(...), db: Session = Depends(get_d
                 if not row_data.get("file_code") or not row_data.get("full_name"):
                     continue
                 row_data = _normalize_row_data(row_data)
+                print(f"Processing row for {row_data.get('full_name')} - file_code: {row_data.get('file_code')}")
                 existing = db.query(models.Employee).filter(models.Employee.file_code == row_data["file_code"]).first()
                 if existing:
                     for key, value in row_data.items():
                         if hasattr(existing, key) and value is not None:
                             setattr(existing, key, value)
                 else:
-                    db.add(models.Employee(**row_data))
+                    try:
+                        # Ensure contact_number is always a string
+                        if 'contact_number' in row_data and row_data['contact_number'] is not None:
+                            row_data['contact_number'] = str(row_data['contact_number'])
+                        db.add(models.Employee(**row_data))
+                    except Exception as row_error:
+                        print(f"Error adding employee {row_data.get('full_name')}: {row_error}")
+                        print(f"Row data: {row_data}")
+                        raise row_error
                 imported += 1
 
         db.commit()
