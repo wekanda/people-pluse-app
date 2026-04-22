@@ -56,31 +56,41 @@ BOOL_KEYS = {
 
 @router.post("/excel")
 async def upload_excel(file: UploadFile = File(...), db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    if current_user.role != "hr_admin":
-        raise HTTPException(status_code=403, detail="Only HR admin can upload")
+    try:
+        if current_user.role != "hr_admin":
+            raise HTTPException(status_code=403, detail="Only HR admin can upload")
 
-    workbook = openpyxl.load_workbook(file.file)
-    imported = 0
-    for sheet in workbook.worksheets:
-        header_row_index, headers = _find_headers(sheet)
-        if not headers:
-            continue
-        for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
-            row_data = _map_row_data(headers, row)
-            if not row_data.get("file_code") or not row_data.get("full_name"):
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
+
+        workbook = openpyxl.load_workbook(file.file)
+        imported = 0
+        for sheet in workbook.worksheets:
+            header_row_index, headers = _find_headers(sheet)
+            if not headers:
                 continue
-            row_data = _normalize_row_data(row_data)
-            existing = db.query(models.Employee).filter(models.Employee.file_code == row_data["file_code"]).first()
-            if existing:
-                for key, value in row_data.items():
-                    if hasattr(existing, key) and value is not None:
-                        setattr(existing, key, value)
-            else:
-                db.add(models.Employee(**row_data))
-            imported += 1
+            for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
+                row_data = _map_row_data(headers, row)
+                if not row_data.get("file_code") or not row_data.get("full_name"):
+                    continue
+                row_data = _normalize_row_data(row_data)
+                existing = db.query(models.Employee).filter(models.Employee.file_code == row_data["file_code"]).first()
+                if existing:
+                    for key, value in row_data.items():
+                        if hasattr(existing, key) and value is not None:
+                            setattr(existing, key, value)
+                else:
+                    db.add(models.Employee(**row_data))
+                imported += 1
 
-    db.commit()
-    return {"message": f"Imported/updated {imported} records"}
+        db.commit()
+        return {"message": f"Imported/updated {imported} records"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Upload error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
 def _find_headers(sheet):
