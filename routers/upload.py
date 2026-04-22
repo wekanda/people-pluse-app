@@ -17,7 +17,10 @@ HEADER_MAP = {
     "full name": "full_name",
     "name": "full_name",
     "status": "status",
+    "staff status": "status",
+    "employment status": "status",
     "position": "position",
+    "designation": "position",
     "location": "location",
     "site": "location",
     "contact": "contact_number",
@@ -33,6 +36,7 @@ HEADER_MAP = {
     "probation end": "probation_end",
     "notice period": "notice_period",
     "employment type": "employment_type",
+    "contract type": "employment_type",
     "missing application/resume": "missing_app_resume",
     "missing app resume": "missing_app_resume",
     "missing appointment letter": "missing_appointment_letter",
@@ -68,18 +72,23 @@ async def upload_excel(file: UploadFile = File(...), db: Session = Depends(get_d
         imported = 0
         updated = 0
         errors = []
+        sheets_processed = []
         
-        for sheet in workbook.worksheets:
+        for sheet_index, sheet in enumerate(workbook.worksheets, 1):
+            print(f"\nProcessing sheet {sheet_index}: '{sheet.title}'")
             header_row_index, headers = _find_headers(sheet)
             if not headers:
+                print(f"  No headers found in sheet '{sheet.title}', skipping...")
                 continue
+            
+            sheets_processed.append(sheet.title)
             for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
                 try:
                     row_data = _map_row_data(headers, row)
                     if not row_data.get("file_code") or not row_data.get("full_name"):
                         continue
                     row_data = _normalize_row_data(row_data)
-                    print(f"Processing row for {row_data.get('full_name')} - file_code: {row_data.get('file_code')}")
+                    print(f"Processing: {row_data.get('full_name')} (file_code: {row_data.get('file_code')}, status: {row_data.get('status')}, project: {row_data.get('project')})")
                     
                     # Ensure contact_number is always a string
                     if 'contact_number' in row_data and row_data['contact_number'] is not None:
@@ -109,9 +118,11 @@ async def upload_excel(file: UploadFile = File(...), db: Session = Depends(get_d
                     continue
 
         if errors:
-            return {"message": f"Imported {imported} new records, updated {updated} existing records. {len(errors)} errors occurred.", "errors": errors[:10]}  # Limit errors shown
+            message = f"Processed {len(sheets_processed)} sheets: {', '.join(sheets_processed)}. Imported {imported} new records, updated {updated} existing records. {len(errors)} errors occurred."
+            return {"message": message, "errors": errors[:10]}
         else:
-            return {"message": f"Successfully imported {imported} new records and updated {updated} existing records"}
+            message = f"Processed {len(sheets_processed)} sheets: {', '.join(sheets_processed)}. Successfully imported {imported} new records and updated {updated} existing records"
+            return {"message": message}
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -150,6 +161,21 @@ def _normalize_row_data(data):
             normalized[key] = _parse_date(value)
         else:
             normalized[key] = str(value).strip() if isinstance(value, str) else value
+    
+    # Infer status from project name if status is empty
+    if not normalized.get("status") and normalized.get("project"):
+        project = str(normalized.get("project", "")).upper()
+        if "EXITED" in project or "EXIT" in project:
+            normalized["status"] = "Exited"
+        elif "RECESS" in project or "ON RECESS" in project:
+            normalized["status"] = "On Recess"
+        else:
+            # Default to Active if status not specified and project doesn't indicate otherwise
+            normalized["status"] = "Active"
+    elif not normalized.get("status"):
+        # If no project either, default to Active
+        normalized["status"] = "Active"
+    
     return normalized
 
 
