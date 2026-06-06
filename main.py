@@ -2,11 +2,12 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import text
-from datetime import datetime, timedelta
+from sqlalchemy import text, func
+from datetime import datetime, date, timedelta
 from database import engine, Base, get_db
 from routers import employees, leave, timesheet, appraisal, documents, notifications, upload
 from auth_router import router as auth_router
+from auth import get_current_user
 import models
 
 Base.metadata.create_all(bind=engine)
@@ -21,7 +22,9 @@ def ensure_schema_columns():
                 columns = [row[1] for row in result]
                 if 'location' not in columns:
                     conn.execute(text('ALTER TABLE employees ADD COLUMN location VARCHAR'))
-                    conn.commit()
+                if 'photo_url' not in columns:
+                    conn.execute(text('ALTER TABLE employees ADD COLUMN photo_url VARCHAR'))
+                conn.commit()
         except Exception as e:
             print(f"SQLite schema check warning: {e}")
 
@@ -65,7 +68,7 @@ def debug_schema(db: Session = Depends(get_db)):
         return {"error": str(e)}
 
 @app.get("/api/dashboard")
-def dashboard(db: Session = Depends(get_db)):
+def dashboard(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     total_staff = db.query(models.Employee).count()
     active_staff = db.query(models.Employee).filter(models.Employee.status == "Active").count()
     
@@ -86,6 +89,19 @@ def dashboard(db: Session = Depends(get_db)):
     project_count = db.query(models.Employee.project).distinct().count()
     location_count = db.query(models.Employee.location).filter(models.Employee.location != None).distinct().count()
     
+    # Payroll-related summary (using timesheet data)
+    year = today.year
+    total_hours = db.query(func.sum(models.Timesheet.hours_worked + models.Timesheet.overtime_hours)).filter(
+        models.Timesheet.date >= date(year, 1, 1),
+        models.Timesheet.date <= date(year, 12, 31)
+    ).scalar() or 0
+    pending_timesheet_approvals = db.query(models.Timesheet).filter(models.Timesheet.approved == False).count()
+    pending_leave_approvals = db.query(models.LeaveRequest).filter(models.LeaveRequest.status == "Pending").count()
+    unread_notifications = db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id,
+        models.Notification.read == False
+    ).count()
+
     # Get list of expiring contracts
     expiring_contracts = db.query(models.Employee).filter(
         models.Employee.contract_end.between(today, thirty_days_later)
@@ -93,13 +109,25 @@ def dashboard(db: Session = Depends(get_db)):
     
     expiring_list = [
         {
+            "id": emp.id,
             "full_name": emp.full_name,
             "file_code": emp.file_code,
             "contract_end": str(emp.contract_end),
-            "project": emp.project
+            "project": emp.project,
+            "position": emp.position,
+            "status": emp.status,
+            "contact_number": emp.contact_number,
+            "location": emp.location,
+            "photo_url": emp.photo_url,
+            "missing_app_resume": emp.missing_app_resume,
+            "missing_appointment_letter": emp.missing_appointment_letter,
+            "missing_academic_docs": emp.missing_academic_docs,
+            "missing_national_id": emp.missing_national_id,
         }
         for emp in expiring_contracts
     ]
+
+    featured_employee = expiring_list[0] if expiring_list else None
     
     return {
         "total_staff": total_staff,
@@ -108,7 +136,12 @@ def dashboard(db: Session = Depends(get_db)):
         "staff_with_missing_docs": missing_docs,
         "project_count": project_count,
         "location_count": location_count,
-        "expiring_contracts": expiring_list
+        "year_to_date_hours": float(total_hours),
+        "pending_leave_approvals": pending_leave_approvals,
+        "pending_timesheet_approvals": pending_timesheet_approvals,
+        "unread_notifications": unread_notifications,
+        "expiring_contracts": expiring_list,
+        "featured_employee": featured_employee
     }
 
 # Mount static files LAST so API routes take precedence

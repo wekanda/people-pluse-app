@@ -16,6 +16,7 @@ class EmployeeCreate(BaseModel):
     position: str | None = None
     contact_number: str | None = None
     location: str | None = None
+    photo_url: str | None = None
     locker: str | None = None
     date_of_appointment: date | None = None
     contract_start: date | None = None
@@ -31,6 +32,7 @@ class EmployeeUpdate(BaseModel):
     position: str | None = None
     contact_number: str | None = None
     location: str | None = None
+    photo_url: str | None = None
     contract_end: date | None = None
     missing_app_resume: bool | None = None
     missing_appointment_letter: bool | None = None
@@ -46,6 +48,7 @@ class EmployeeResponse(BaseModel):
     position: str | None = None
     contact_number: str | None = None
     location: str | None = None
+    photo_url: str | None = None
     employment_type: str | None = None
     contract_end: date | None = None
     class Config:

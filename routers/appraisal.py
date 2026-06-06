@@ -45,6 +45,10 @@ def create_appraisal(appraisal: AppraisalCreate, db: Session = Depends(get_db), 
 def get_employee_appraisals(employee_id: int, db: Session = Depends(get_db)):
     return db.query(models.PerformanceAppraisal).filter(models.PerformanceAppraisal.employee_id == employee_id).all()
 
+@router.get("/", response_model=List[AppraisalResponse])
+def list_appraisals(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return db.query(models.PerformanceAppraisal).order_by(models.PerformanceAppraisal.appraisal_date.desc()).offset(skip).limit(limit).all()
+
 @router.get("/{appraisal_id}", response_model=AppraisalResponse)
 def get_appraisal(appraisal_id: int, db: Session = Depends(get_db)):
     appraisal = db.query(models.PerformanceAppraisal).filter(models.PerformanceAppraisal.id == appraisal_id).first()

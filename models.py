@@ -39,6 +39,7 @@ class Employee(Base):
     missing_national_id = Column(Boolean, default=False)
     missing_policy_declaration = Column(Boolean, default=False)
     missing_end_of_contract_notice = Column(Boolean, default=False)
+    photo_url = Column(String, nullable=True)
 
     leave_requests = relationship("LeaveRequest", back_populates="employee")
     timesheets = relationship("Timesheet", back_populates="employee")

@@ -44,3 +44,12 @@ def mark_as_read(notification_id: int, db: Session = Depends(get_db), current_us
     notif.read = True
     db.commit()
     return {"message": "Notification marked as read"}
+
+@router.put("/read-all")
+def mark_all_read(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    updated = db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id,
+        models.Notification.read == False
+    ).update({"read": True}, synchronize_session=False)
+    db.commit()
+    return {"message": "All notifications marked as read", "updated": updated}

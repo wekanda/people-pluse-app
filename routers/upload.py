@@ -47,6 +47,14 @@ HEADER_MAP = {
     "missing national id": "missing_national_id",
     "missing policy declaration": "missing_policy_declaration",
     "missing end of contract notice": "missing_end_of_contract_notice",
+    # photo / avatar mapping (allows Excel to include image filename or URL)
+    "photo": "photo_url",
+    "photo url": "photo_url",
+    "image": "photo_url",
+    "picture": "photo_url",
+    "profile image": "photo_url",
+    "profile photo": "photo_url",
+    "avatar": "photo_url",
 }
 
 BOOL_KEYS = {
