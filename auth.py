@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 import bcrypt
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
@@ -7,7 +9,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models
 
-SECRET_KEY = "your-secret-key-change-this"
+load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this")
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

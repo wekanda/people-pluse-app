@@ -1,0 +1,17 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Environment files
+.env
+.env.*
+
+# Local database files
+*.db
+*.sqlite3
+
+# Logs and system files
+*.log
+.DS_Store
