@@ -4,13 +4,147 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from datetime import datetime, date, timedelta
-from database import engine, Base, get_db
+from database import engine, Base, SessionLocal, get_db
 from routers import employees, leave, timesheet, appraisal, documents, notifications, upload
 from auth_router import router as auth_router
-from auth import get_current_user
+from auth import get_current_user, get_password_hash, verify_password
 import models
 
 Base.metadata.create_all(bind=engine)
+
+def initialize_seed_users():
+    test_users = [
+        {
+            "email": "admin@peoplepluse.com",
+            "password": "admin123",
+            "full_name": "Admin User",
+            "role": "hr_admin"
+        },
+        {
+            "email": "manager@peoplepluse.com",
+            "password": "manager123",
+            "full_name": "Project Manager",
+            "role": "project_manager"
+        },
+        {
+            "email": "staff@peoplepluse.com",
+            "password": "staff123",
+            "full_name": "Staff Member",
+            "role": "staff"
+        },
+        {
+            "email": "live_staff@peoplepluse.com",
+            "password": "LiveStaff123!",
+            "full_name": "Live Staff",
+            "role": "staff"
+        },
+        {
+            "email": "live_manager@peoplepluse.com",
+            "password": "LiveManager123!",
+            "full_name": "Live Manager",
+            "role": "project_manager"
+        },
+        {
+            "email": "live_admin@peoplepluse.com",
+            "password": "LiveAdmin123!",
+            "full_name": "Live Admin",
+            "role": "hr_admin"
+        }
+    ]
+
+    db = SessionLocal()
+    try:
+        # Create or update users
+        for user_data in test_users:
+            existing = db.query(models.User).filter(models.User.email == user_data["email"]).first()
+            if existing:
+                try:
+                    if not verify_password(user_data["password"], existing.hashed_password):
+                        existing.hashed_password = get_password_hash(user_data["password"])
+                        existing.full_name = user_data["full_name"]
+                        existing.role = user_data["role"]
+                        db.add(existing)
+                        print(f"Updated password for existing user: {user_data['email']}")
+                except Exception:
+                    existing.hashed_password = get_password_hash(user_data["password"])
+                    existing.full_name = user_data["full_name"]
+                    existing.role = user_data["role"]
+                    db.add(existing)
+                    print(f"Repaired corrupted user record: {user_data['email']}")
+            else:
+                user = models.User(
+                    email=user_data["email"],
+                    hashed_password=get_password_hash(user_data["password"]),
+                    full_name=user_data["full_name"],
+                    role=user_data["role"]
+                )
+                db.add(user)
+                print(f"Created user: {user_data['email']}")
+        db.commit()
+        
+        # Create test employees if none exist
+        emp_count = db.query(models.Employee).count()
+        if emp_count == 0:
+            test_employees = [
+                {
+                    "file_code": "EMP001",
+                    "full_name": "Live Staff",
+                    "project": "Test Project",
+                    "status": "Active",
+                    "position": "Staff Member",
+                    "contact_number": "0700000001",
+                    "location": "Nairobi"
+                },
+                {
+                    "file_code": "EMP002",
+                    "full_name": "Live Manager",
+                    "project": "Test Project",
+                    "status": "Active",
+                    "position": "Project Manager",
+                    "contact_number": "0700000002",
+                    "location": "Nairobi"
+                },
+                {
+                    "file_code": "EMP003",
+                    "full_name": "John Doe",
+                    "project": "HR Department",
+                    "status": "Active",
+                    "position": "HR Officer",
+                    "contact_number": "0700000003",
+                    "location": "Head Office"
+                }
+            ]
+            for emp_data in test_employees:
+                emp = models.Employee(**emp_data)
+                db.add(emp)
+                print(f"Created employee: {emp_data['file_code']}")
+            db.commit()
+            
+            # Link live_staff and live_manager to their employees
+            live_staff_user = db.query(models.User).filter(models.User.email == "live_staff@peoplepluse.com").first()
+            live_manager_user = db.query(models.User).filter(models.User.email == "live_manager@peoplepluse.com").first()
+            
+            emp1 = db.query(models.Employee).filter(models.Employee.file_code == "EMP001").first()
+            emp2 = db.query(models.Employee).filter(models.Employee.file_code == "EMP002").first()
+            
+            if live_staff_user and emp1:
+                live_staff_user.employee_id = emp1.id
+                db.add(live_staff_user)
+                print(f"Linked live_staff to employee id {emp1.id}")
+            
+            if live_manager_user and emp2:
+                live_manager_user.employee_id = emp2.id
+                db.add(live_manager_user)
+                print(f"Linked live_manager to employee id {emp2.id}")
+            
+            db.commit()
+    except Exception as e:
+        print(f"Seed initialization warning: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+initialize_seed_users()
 
 # Ensure new SQLite columns exist when the app schema evolves.
 def ensure_schema_columns():
