@@ -6,15 +6,13 @@ Run this after starting the backend for the first time
 
 from database import SessionLocal, engine
 from models import Base, User, Employee
-from auth import get_password_hash
+from auth import get_password_hash, verify_password
 from datetime import date, timedelta
 
 # Create tables
 Base.metadata.create_all(bind=engine)
 
 db = SessionLocal()
-
-# Create test users
 test_users = [
     {
         "email": "admin@peoplepluse.com",
@@ -36,10 +34,24 @@ test_users = [
     }
 ]
 
-# Add users if they don't exist
+# Add users if they don't exist or repair them if the stored password is stale
 for user_data in test_users:
     existing = db.query(User).filter(User.email == user_data["email"]).first()
-    if not existing:
+    if existing:
+        try:
+            if not verify_password(user_data["password"], existing.hashed_password):
+                existing.hashed_password = get_password_hash(user_data["password"])
+                existing.full_name = user_data["full_name"]
+                existing.role = user_data["role"]
+                db.add(existing)
+                print(f"Updated password for existing user: {user_data['email']}")
+        except Exception:
+            existing.hashed_password = get_password_hash(user_data["password"])
+            existing.full_name = user_data["full_name"]
+            existing.role = user_data["role"]
+            db.add(existing)
+            print(f"Repaired corrupted user record: {user_data['email']}")
+    else:
         hashed_pass = get_password_hash(user_data["password"])
         user = User(
             email=user_data["email"],

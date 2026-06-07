@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import date
+from datetime import date, datetime
 from sqlalchemy import func
 import models, schemas
 from database import get_db
@@ -13,7 +13,7 @@ class LeaveRequestResponse(schemas.LeaveRequestCreate):
     id: int
     days: float
     status: str
-    submitted_at: date
+    submitted_at: datetime
     reviewed_by: int | None = None
     class Config:
         from_attributes = True
