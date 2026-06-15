@@ -1,0 +1,11 @@
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+frontend/node_modules
+backend/people_pluse.db
+dist
+frontend/dist
+.vscode
+.env
+.env.*
+**/node_modules
