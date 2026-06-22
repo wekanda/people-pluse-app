@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite and local DBs
+*.db
+*.sqlite3
+
+# Logs and runtime files
+*.log
+backend_uvicorn.log
+
+# Environment
+.env
+.env.*
+
+# Node
+node_modules/
+/dist
+/build
+
+# Uploads and generated files
+uploads/
+
+# OS files
+.DS_Store
+Thumbs.db
