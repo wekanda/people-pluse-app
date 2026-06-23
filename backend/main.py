@@ -8,11 +8,6 @@ import models
 import auth
 import auth_router
 import schemas
-sys.modules['database'] = database
-sys.modules['models'] = models
-sys.modules['auth'] = auth
-sys.modules['auth_router'] = auth_router
-sys.modules['schemas'] = schemas
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,9 +16,27 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from datetime import datetime, date, timedelta
 from database import engine, Base, SessionLocal, get_db
-from routers import employees, leave, timesheet, appraisal, documents, notifications, upload, recruitment, finance, requisition
-from routers import hr_tools, ats, calendar_integration, assessments, reporting, document_generation
-from routers import leave_management, employee_documents, document_management, payroll, excel_import
+import employees
+import leave
+import timesheet
+import appraisal
+import documents
+import notifications
+import upload
+import recruitment
+import finance
+import requisition
+import hr_tools
+import ats
+import calendar_integration
+import assessments
+import reporting
+import document_generation
+import leave_management
+import employee_documents
+import document_management
+import payroll
+import excel_import
 from auth_router import router as auth_router
 from auth import get_current_user, get_password_hash, verify_password
 
@@ -56,6 +69,12 @@ def initialize_seed_users():
             "role": "finance"
         },
         {
+            "email": "pay@peoplepluse.com",
+            "password": "pay123",
+            "full_name": "Payroll Officer",
+            "role": "pay"
+        },
+        {
             "email": "live_staff@peoplepluse.com",
             "password": "LiveStaff123!",
             "full_name": "Live Staff",
@@ -72,6 +91,12 @@ def initialize_seed_users():
             "password": "LiveAdmin123!",
             "full_name": "Live Admin",
             "role": "hr_admin"
+        },
+        {
+            "email": "live_pay@peoplepluse.com",
+            "password": "LivePay123!",
+            "full_name": "Live Payroll Officer",
+            "role": "pay"
         }
     ]
 

@@ -44,8 +44,8 @@ async def generate_payroll(
     db: Session = Depends(get_db)
 ):
     """Generate payroll for an employee for a specific period."""
-    if current_user.role not in ["hr_admin", "finance"]:
-        raise HTTPException(status_code=403, detail="Only HR/Finance can generate payroll")
+    if current_user.role not in ["hr_admin", "finance", "pay"]:
+        raise HTTPException(status_code=403, detail="Only HR/Finance/Pay can generate payroll")
     
     employee = db.query(models.Employee).get(employee_id)
     if not employee:
@@ -104,7 +104,7 @@ async def list_payroll(
     db: Session = Depends(get_db)
 ):
     """List all payroll records (paginated)."""
-    if current_user.role not in ["hr_admin", "finance"]:
+    if current_user.role not in ["hr_admin", "finance", "pay"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     query = db.query(models.Payroll)
@@ -128,7 +128,7 @@ async def approve_payroll(
     db: Session = Depends(get_db)
 ):
     """Approve payroll (Finance/HR only)."""
-    if current_user.role not in ["hr_admin", "finance"]:
+    if current_user.role not in ["hr_admin", "finance", "pay"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     payroll = db.query(models.Payroll).get(payroll_id)
@@ -153,7 +153,7 @@ async def submit_payroll(
     db: Session = Depends(get_db)
 ):
     """Submit payroll for approval."""
-    if current_user.role not in ["hr_admin", "finance"]:
+    if current_user.role not in ["hr_admin", "finance", "pay"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     payroll = db.query(models.Payroll).get(payroll_id)
@@ -178,7 +178,7 @@ async def mark_payroll_paid(
     db: Session = Depends(get_db)
 ):
     """Mark payroll as paid."""
-    if current_user.role not in ["hr_admin", "finance"]:
+    if current_user.role not in ["hr_admin", "finance", "pay"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     payroll = db.query(models.Payroll).get(payroll_id)
@@ -202,7 +202,7 @@ async def get_payroll_statistics(
     db: Session = Depends(get_db)
 ):
     """Get payroll statistics (HR/Finance only)."""
-    if current_user.role not in ["hr_admin", "finance"]:
+    if current_user.role not in ["hr_admin", "finance", "pay"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     # Get current month's payroll
@@ -236,4 +236,90 @@ async def get_payroll_statistics(
         "submitted": sum(1 for p in payrolls if p.status == "submitted"),
         "approved": sum(1 for p in payrolls if p.status == "approved"),
         "paid": sum(1 for p in payrolls if p.status == "paid")
+    }
+
+
+@router.post("/prepare/bulk")
+async def prepare_bulk_payroll(
+    pay_period_start: date,
+    pay_period_end: date,
+    basic_salary: float = None,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk prepare payroll for all active employees (HRM/P&C/Finance only).
+    
+    This endpoint allows HRM and P&C personnel to prepare payroll for a given pay period
+    for all active employees. If basic_salary is not provided, it will use default values.
+    """
+    if current_user.role not in ["hr_admin", "finance", "pay"]:
+        raise HTTPException(status_code=403, detail="Only HR/Finance/Pay can prepare payroll")
+    
+    # Get all active employees
+    active_employees = db.query(models.Employee).filter(
+        models.Employee.status == "active"
+    ).all()
+    
+    if not active_employees:
+        raise HTTPException(status_code=404, detail="No active employees found")
+    
+    created_payrolls = []
+    
+    for employee in active_employees:
+        # Check if payroll already exists for this period
+        existing = db.query(models.Payroll).filter(
+            models.Payroll.employee_id == employee.id,
+            models.Payroll.pay_period_start == pay_period_start,
+            models.Payroll.pay_period_end == pay_period_end
+        ).first()
+        
+        if existing:
+            continue  # Skip if already exists
+        
+        # Use provided basic_salary or default to 500000
+        emp_basic_salary = basic_salary if basic_salary else 500000
+        
+        # Calculate deductions (Ugandan standards)
+        income_tax = emp_basic_salary * 0.10  # 10% basic rate
+        if emp_basic_salary > 5000000:
+            income_tax = emp_basic_salary * 0.15
+        
+        # NSSF (National Social Security Fund) - 5%
+        nssf_contribution = emp_basic_salary * 0.05
+        
+        # Calculate gross and net
+        gross_salary = emp_basic_salary
+        total_deductions = income_tax + nssf_contribution
+        net_salary = gross_salary - total_deductions
+        
+        payroll = models.Payroll(
+            employee_id=employee.id,
+            pay_period_start=pay_period_start,
+            pay_period_end=pay_period_end,
+            basic_salary=emp_basic_salary,
+            gross_salary=gross_salary,
+            income_tax=income_tax,
+            nssf_contribution=nssf_contribution,
+            net_salary=net_salary,
+            created_by=current_user.id,
+            status="draft"
+        )
+        
+        db.add(payroll)
+        created_payrolls.append(payroll)
+    
+    if created_payrolls:
+        db.commit()
+        # Refresh all created payrolls to get IDs
+        for p in created_payrolls:
+            db.refresh(p)
+    
+    return {
+        "message": f"Successfully prepared payroll for {len(created_payrolls)} employees",
+        "period_start": pay_period_start,
+        "period_end": pay_period_end,
+        "created_count": len(created_payrolls),
+        "skipped_count": len(active_employees) - len(created_payrolls),
+        "payrolls": created_payrolls
     }
